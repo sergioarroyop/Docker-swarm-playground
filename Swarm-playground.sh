@@ -1,5 +1,13 @@
 #!/bin/bash
 
+playground-delete(){
+    # Deleting playground
+    for del in $(docker-machine ls | grep -o bro'[0-9$]'); do {
+        echo "Deleting machine $del"
+        docker-machine rm $del
+    } done
+}
+
 playground-init() {
 
     ints='^[0-9]+$'
@@ -9,6 +17,21 @@ playground-init() {
     #    echo "Please insert a valid number of nodes"
     #    exit 1
     #fi
+
+    # Checking if the nodes are created
+    CHECK=$(docker-machine ls | grep bro1)
+    if [ -z $CHECK ]
+    then
+        echo "The playground already exist, do you want to delete it? (y/n)"
+        read option
+        if [ $option =~ "y" ] 
+        then
+            playground-delete()
+        else
+            echo "Bye bye!"
+            exit 0
+        fi
+    else
 
     # Checking machines and turning them up them
     for ((num=1; num<=$1; num++)); do {
@@ -20,7 +43,7 @@ playground-init() {
     ip_master=$(docker-machine ip bro1)
 
     # Starting swarm
-    $(eval docker-machine env bro1)
+    eval $(docker-machine env bro1)
     
     docker swarm init --advertise-addr $ip_master
     
@@ -33,14 +56,6 @@ playground-init() {
         echo "Joining bro$num as a worker"
         eval $(docker-machine env bro$num)
         docker swarm join --token worker_token $ip_master:2377
-    } done
-}
-
-playground-delete(){
-    # Deleting playground
-    for del in $(docker-machine ls | grep -o bro'[0-9$]'); do {
-        echo "Deleting machine $del"
-        docker-machine rm $del
     } done
 }
 
