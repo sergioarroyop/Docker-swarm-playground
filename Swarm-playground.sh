@@ -1,11 +1,32 @@
 #!/bin/bash
 
+red () {
+	echo -e "\e[31m $1 \e[0m"
+}
+
+yellow () {
+	echo -e "\e[33m $1 \e[0m"
+}
+
+green () {
+	echo -e "\e[32m $1 \e[0m"
+}
+
+errors () {
+	red "$1"
+	exit 1
+}
+
+ifdeb () {
+	green "$1" || errors "$2"
+}
+
 playground-delete(){
     # Deleting playground
-    for del in $(docker-machine ls | grep -o bro'[0-9$]'); do {
-        echo "Deleting machine $del"
-        docker-machine rm $del
-    } done
+    for del in $(docker-machine ls | grep -o bro'[0-9$]'); do
+        yellow "- Deleting machine $del"
+        docker-machine rm $del &> ./errors.log && ifdeb "Node deleted successfuly" "There was a problem deleting the node, check errors.log" 
+    done
 }
 
 playground-init() {
@@ -20,57 +41,60 @@ playground-init() {
 
     # Checking if the nodes are created
     CHECK=$(docker-machine ls | grep bro1)
-    if [ -z $CHECK ]
+    if [ ! -z "$CHECK" ]
     then
-        echo "The playground already exist, do you want to delete it? (y/n)"
+        red "The playground already exist, do you want to delete it? (y/n)"
         read option
-        if [ $option =~ "y" ] 
+        if [ $option == "y" ] 
         then
-            playground-delete()
+            playground-delete
         else
-            echo "Bye bye!"
-            exit 0
+            errors "- Bye bye!"
         fi
     else
 
     # Checking machines and turning them up them
     for ((num=1; num<=$1; num++)); do {
-        echo "Creating machine bro$num"
-        docker-machine create --driver virtualbox bro$num
+        yellow "- Creating machine bro$num"
+        docker-machine create --driver virtualbox bro$num &> ./errors.log &&
+	green "+ Nodes created successfuly" || errors "- There was a problem creating the nodes, check errors.log"
     } done
 
     # Getting master IP
     ip_master=$(docker-machine ip bro1)
 
     # Starting swarm
-    eval $(docker-machine env bro1)
+    eval $(docker-machine env bro1) &> errors.log
     
-    docker swarm init --advertise-addr $ip_master
+    docker swarm init --advertise-addr $ip_master &> errors.log
     
     # Getting master and worker token
     master_token=$(docker-machine ssh bro1 "docker swarm join-token master -q")
     worker_token=$(docker-machine ssh bro2 "docker swarm join-token worker -q")
 
     # Joining workers to swarm
-    for ((num=2; num<=$1; num++)); do {
-        echo "Joining bro$num as a worker"
+    for ((num=2; num<=$1; num++)); do
+        yellow "- Joining bro$num as a worker"
         eval $(docker-machine env bro$num)
-        docker swarm join --token worker_token $ip_master:2377
-    } done
+        docker swarm join --token worker_token $ip_master:2377 &> errors.log && \
+	green "+ Node bro$num joined successfuly" || errors "- Node bro$num not joined :c"
+    done
+
+    fi
 }
 
 init(){
-    echo "What do you want to do?"
-    echo "1. Create playground"
-    echo "2. Delete playground"
-    echo "3. Exit"
+    yellow "- What do you want to do?"
+    yellow "1. Create playground"
+    yellow "2. Delete playground"
+    yellow "3. Exit"
     read option
 
     clear
 
     if [ $option == 1 ]
     then
-        echo "How many nodes do you want?"
+        yellow "- How many nodes do you want?"
         read num
     fi
 }
@@ -85,11 +109,11 @@ case $option in
         playground-delete
     ;;
     3)
-        echo "Bye Bye"
+        yellow "- Bye Bye"
         exit 0
     ;;
     *)
-        echo "Please, select an option"
+        yellow "- Please, select an option"
         init        
     ;;
 esac
